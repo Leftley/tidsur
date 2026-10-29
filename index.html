@@ -114,7 +114,7 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px;fl
 <div id="log" hidden>
   <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
     <div class="tabs"><button class="tab on" data-tab="days" type="button">Dage</button><button class="tab" data-tab="done" type="button">Afsluttede opgaver</button></div>
-    <div class="acts"><button class="btn" id="csvBtn" type="button">Eksportér CSV</button><button class="btn" id="logClose" type="button">Tilbage</button></div>
+    <div class="acts" style="flex-wrap:wrap;justify-content:flex-end"><button class="btn danger" id="clrLog" type="button">Ryd log</button><button class="btn danger" id="clrDone" type="button">Ryd afsluttede</button><button class="btn" id="csvBtn" type="button">Eksportér CSV</button><button class="btn" id="logClose" type="button">Tilbage</button></div>
   </div>
   <div class="week" id="week"></div>
   <div class="scroll" id="logList"></div>
@@ -141,6 +141,17 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px;fl
     <div class="big" id="doneTime">0:00:00</div>
     <div style="color:var(--dim);font-size:14px" id="doneSub"></div>
     <button class="btn prim" type="button" id="doneOk">Ok</button>
+  </div>
+</div>
+
+<div class="over" id="ovConf" hidden>
+  <div class="sheet">
+    <h2 id="confTitle">Er du sikker?</h2>
+    <div style="color:var(--dim);font-size:14px;line-height:1.5" id="confText"></div>
+    <div class="row-btn">
+      <button class="btn" type="button" id="confNo">Annullér</button>
+      <button class="btn danger" type="button" id="confYes">Ryd</button>
+    </div>
   </div>
 </div>
 
@@ -185,12 +196,13 @@ function loadLocal(){try{const r=JSON.parse(localStorage.getItem(LS)||'null');if
 const chains={};
 function put(id,data){saveLocal();if(!col)return;
   chains[id]=(chains[id]||Promise.resolve()).then(()=>col.doc(id).set(data)).catch(()=>toast('Kunne ikke gemme online. Gemt på telefonen.'));}
-const saveState=()=>put('state',{kind:'state',tasks:st.tasks,run:st.run});
+const saveState=()=>put('state',{kind:'state',tasks:st.tasks,run:st.run,gone:st.gone||{}});
 const saveDay=k=>put('d-'+k,Object.assign({kind:'day'},days[k]));
 
 /* ---------- logik ---------- */
 const uid=()=>Math.random().toString(36).slice(2,9);
 const task=id=>st.tasks.find(t=>t.id===id);
+const nameOf=id=>{const t=task(id);return t?t.name:((st.gone&&st.gone[id])||'Slettet');};
 const active=()=>st.tasks.filter(t=>!t.done);
 function closeRun(atMs){const r=st.run;if(!r)return;
   const end=Math.min(atMs,dayEnd(r.s)??r.s);
@@ -285,6 +297,19 @@ $('doneOk').onclick=()=>$('ovDone').hidden=true;
 
 /* ---------- log ---------- */
 let tab='days';
+let confAct=null;
+function ask(title,text,btn,fn){$('confTitle').textContent=title;$('confText').textContent=text;$('confYes').textContent=btn;confAct=fn;$('ovConf').hidden=false;}
+$('confNo').onclick=()=>{$('ovConf').hidden=true;confAct=null;};
+$('ovConf').addEventListener('click',e=>{if(e.target.id==='ovConf'){$('ovConf').hidden=true;confAct=null;}});
+$('confYes').onclick=()=>{$('ovConf').hidden=true;const f=confAct;confAct=null;if(f)f();};
+$('clrLog').onclick=()=>{const today=key(Date.now());const n=Object.keys(days).filter(k=>k!==today).length;
+  if(!n){toast('Der er ingen tidligere dage at rydde');return;}
+  ask('Ryd loggen?','Alle '+n+' tidligere dage slettes. I dag bliver stående, og den samlede tid på dine opgaver bliver ikke rørt. Det kan ikke fortrydes.','Ryd log',()=>{
+    for(const k of Object.keys(days))if(k!==today)delete days[k];saveLocal();renderLog();toast('Loggen er ryddet');});};
+$('clrDone').onclick=()=>{const dn=st.tasks.filter(t=>t.done);
+  if(!dn.length){toast('Der er ingen afsluttede opgaver');return;}
+  ask('Ryd afsluttede opgaver?',dn.length+' afsluttede opgave'+(dn.length===1?'':'r')+' slettes for altid og kan ikke genåbnes. Det kan ikke fortrydes.','Ryd afsluttede',()=>{
+    st.gone=st.gone||{};for(const t of dn)st.gone[t.id]=t.name;st.tasks=st.tasks.filter(t=>!t.done);saveState();render();renderLog();toast('Afsluttede opgaver er slettet');});};
 $('logBtn').onclick=()=>{$('log').hidden=false;renderLog();};
 $('logClose').onclick=()=>{$('log').hidden=true;};
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));renderLog();});
@@ -301,7 +326,7 @@ function renderLog(){const now=Date.now(),L=$('logList');L.innerHTML='';
     let any=false;for(const k of ks){const m=dayTotals(k,now);const ids=Object.keys(m).filter(i=>m[i]>=1).sort((a,b)=>m[b]-m[a]);if(!ids.length)continue;any=true;
       const tot=ids.reduce((x,i)=>x+m[i],0);const r=document.createElement('div');r.className='lr';
       r.innerHTML='<span class="d"></span><span class="p"></span><span class="t"></span>';
-      r.children[0].textContent=dfShort.format(parseKey(k));r.children[1].textContent=ids.map(i=>(task(i)?task(i).name:'Slettet')+' '+fhm(m[i])).join(' · ');r.children[2].textContent=fhm(tot);L.appendChild(r);}
+      r.children[0].textContent=dfShort.format(parseKey(k));r.children[1].textContent=ids.map(i=>nameOf(i)+' '+fhm(m[i])).join(' · ');r.children[2].textContent=fhm(tot);L.appendChild(r);}
     if(!any)L.innerHTML='<div class="empty">Ingen registreret tid endnu. Tryk på en opgave for at starte uret.</div>';}
   else{const dn=st.tasks.filter(t=>t.done).sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
     if(!dn.length){L.innerHTML='<div class="empty">Ingen afsluttede opgaver. Hold fingeren inde på en opgave for at afslutte den.</div>';return;}
@@ -315,7 +340,7 @@ function renderLog(){const now=Date.now(),L=$('logList');L.innerHTML='';
 /* ---------- CSV ---------- */
 $('csvBtn').onclick=async()=>{const now=Date.now();const rows=['Dato;Opgave;Tid (t:mm);Timer'];
   for(const k of Object.keys(days).sort()){const m=dayTotals(k,now);for(const i of Object.keys(m)){if(m[i]<1)continue;
-    const nm=(task(i)?task(i).name:'Slettet').replace(/;/g,',');rows.push(k+';'+nm+';'+fhm(m[i])+';'+(m[i]/3600).toFixed(2).replace('.',','));}}
+    const nm=nameOf(i).replace(/;/g,',');rows.push(k+';'+nm+';'+fhm(m[i])+';'+(m[i]/3600).toFixed(2).replace('.',','));}}
   const csv='﻿'+rows.join('\r\n');
   try{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='tidsregistrering-'+key(now)+'.csv';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);toast('CSV gemt i Downloads');return;}catch(e){}
   try{await navigator.clipboard.writeText(csv.slice(1));toast('CSV kopieret. Sæt den ind i Excel.');}catch(e){toast('Kunne ikke eksportere');}};
