@@ -220,7 +220,7 @@ function tileState(t,now){
   if(run){ if(inWin(now))return['run','Kører'];
     const w=winsMs(now);const nx=w.find(([a])=>a>now);
     return['pause',nx?('Pause · fortsætter '+new Date(nx[0]).toTimeString().slice(0,5)):'Pauset'];}
-  return todaySec(t.id,now)>0?['pause','Pauset']:['','Tryk for at starte'];}
+  return totalSec(t.id,now)>0?['pause','Pauset']:['','Tryk for at starte'];}
 function buildGrid(){grid.innerHTML='';const list=active();
   const n=list.length+(list.length<MAXT?1:0);grid.classList.toggle('two',n>4);
   list.forEach(t=>{const b=document.createElement('button');b.type='button';b.className='tile';b.dataset.id=t.id;
@@ -238,7 +238,7 @@ function render(){buildGrid();}
 
 function tick(){const now=Date.now();autoClose(now);
   for(const b of grid.querySelectorAll('.tile[data-id]')){const t=task(b.dataset.id);if(!t)continue;
-    const[c,s]=tileState(t,now);b.className='tile'+(c?' '+c:'');b.querySelector('.tm').textContent=fmt(todaySec(t.id,now));b.querySelector('.st').textContent=s;}
+    const[c,s]=tileState(t,now);b.className='tile'+(c?' '+c:'');b.querySelector('.tm').textContent=fmt(totalSec(t.id,now));b.querySelector('.st').textContent=s;}
   header(now);}
 
 function header(now){
@@ -259,7 +259,7 @@ function header(now){
   else if(w.length>1&&nowMin<w[0][1])note='pause om '+Math.ceil(w[0][1]-nowMin)+' min';
   else if(w.length>1&&nowMin<w[1][0])note='frokostpause til '+hm(w[1][0]);
   else note='fyraften om '+fhm((e0-nowMin)*60);
-  $('rmid').innerHTML='Arbejdet <b>'+fhm(worked)+'</b> af '+fhm(goal)+' · registreret <b>'+fmt(reg)+'</b> · '+note;}
+  $('rmid').innerHTML='Arbejdet <b>'+fhm(worked)+'</b> af '+fhm(goal)+' · registreret i dag <b>'+fmt(reg)+'</b> · '+note;}
 
 /* ---------- omdøb / afslut ---------- */
 let editId=null;
