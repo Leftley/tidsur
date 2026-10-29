@@ -363,7 +363,8 @@ if(!st.tasks.length)st.tasks=[{id:uid(),name:'HEWI',done:false,total:0}];
 render();wake();
 setInterval(tick,1000);
 
-if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})});}).catch(()=>{});
+  let reloaded=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(reloaded)return;reloaded=true;location.reload();});}
 /* fuld skærm ved første tryk, hvis telefonen ikke allerede kører app-tilstand */
 document.addEventListener('pointerdown',()=>{if(!document.fullscreenElement&&!matchMedia('(display-mode: fullscreen)').matches&&document.documentElement.requestFullscreen)document.documentElement.requestFullscreen({navigationUI:'hide'}).then(()=>{try{screen.orientation.lock('landscape')}catch(e){}}).catch(()=>{});},{once:true});
 })();
